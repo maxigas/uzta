@@ -4,7 +4,7 @@ from requests import get, post, Session
 from requests.utils import cookiejar_from_dict, dict_from_cookiejar
 
 with open ("password.txt", "r") as password_file:
-        password=password__file.read().replace('\n', '')
+        password=password_file.read().replace('\n', '')
 
 url = 'http://n-1.cc/'
 username = 'maxigas'
@@ -35,5 +35,5 @@ print(r.text)
 print(r.headers)
 print(r.status_code)
 #print(url,username,password,tokens)
-print(cookies)
+#print(cookies)
 print(post_url)
