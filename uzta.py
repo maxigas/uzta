@@ -6,6 +6,7 @@ from requests.utils import cookiejar_from_dict, dict_from_cookiejar
 with open ("password.txt", "r") as password_file:
         password=password_file.read().replace('\n', '')
 
+# Will not work without https (because login security):
 url = 'https://n-1.cc/'
 username = 'maxigas'
 post_url = url + 'action/login'
