@@ -6,7 +6,7 @@ from requests.utils import cookiejar_from_dict, dict_from_cookiejar
 with open ("password.txt", "r") as password_file:
         password=password_file.read().replace('\n', '')
 
-url = 'http://n-1.cc/'
+url = 'https://n-1.cc/'
 username = 'maxigas'
 post_url = url + 'action/login'
 s = Session()
@@ -30,7 +30,7 @@ data = {
 #cookies = cookiejar_from_dict(dict_from_cookiejar(s.cookies))
 #print('----')
 #r = s.post(post_url, data=data, cookies=cookies, allow_redirects=True)
-r = s.post(post_url, data=data)
+r = s.post(post_url, data=data, allow_redirects=True)
 print(r.text)
 print(r.headers)
 print(r.status_code)
