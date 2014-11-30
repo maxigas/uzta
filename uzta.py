@@ -3,7 +3,11 @@ from bs4 import BeautifulSoup as bs
 from requests import get, post, Session
 from requests.utils import cookiejar_from_dict, dict_from_cookiejar
 
-url,username,password = 'http://n-1.cc/','maxigas','FIXME'
+with open ("password.txt", "r") as password_file:
+        password=password__file.read().replace('\n', '')
+
+url = 'http://n-1.cc/'
+username = 'maxigas'
 post_url = url + 'action/login'
 s = Session()
 soup = bs(s.get(url).text)
@@ -23,8 +27,8 @@ data = {
     'returntoreferer': 'false' 
    }
 
-cookies = cookiejar_from_dict(dict_from_cookiejar(s.cookies))
-print('----')
+#cookies = cookiejar_from_dict(dict_from_cookiejar(s.cookies))
+#print('----')
 #r = s.post(post_url, data=data, cookies=cookies, allow_redirects=True)
 r = s.post(post_url, data=data)
 print(r.text)
