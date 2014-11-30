@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup as bs
 from requests import get, post, Session
 from requests.utils import cookiejar_from_dict, dict_from_cookiejar
 
-url,username,password = 'http://n-1.cc/','maxigas','ALb7+/skbEvjRZV0B0a2LgNc'
+url,username,password = 'http://n-1.cc/','maxigas','FIXME'
 post_url = url + 'action/login'
 s = Session()
 soup = bs(s.get(url).text)
