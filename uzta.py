@@ -1,15 +1,49 @@
 #!/usr/bin/python3
 # Saves a Lorea seed a.k.a. the missing export module.
+# Exit codes:
+# 1 One of the configuration files not found.
+# 2 Failed to log in to website.
 from bs4 import BeautifulSoup as bs
 from requests import get, post, Session
 from re import search
 import os
 
+# ---- Step 0. Initialisation
+print('---- Step 0. Initialisation')
 def slurp(name):
-        with open (name + '.txt', 'r') as afile:
-                return afile.read().replace('\n', '')
+        try:
+                with open (name + '.txt', 'r') as afile:
+                        return afile.read().replace('\n', '')
+        except:
+                print('File '+name+'.txt not found.')
+                exit(1)
 
 website,username,password = slurp('website'),slurp('username'),slurp('password')
+
+# TODO Use the datastructure below.
+site = [{'url': website, 'groups':
+         [{'title':'','link':'','sub':'','features':
+           {'assemblies': [],
+            'blog':       [],
+            'bookmarks':  [],
+            'calendar':   [],
+            'decisions':  [],
+            'discussion': {'entry_titles':   [],
+                           'entry_links':    [],
+                           'entry_firsts':   [],
+                           'entry_authors':  [],
+                           'entry_lasts':    [],
+                           'entry_repliers': [],
+                           'entry_counts':   [],
+                           'entry_tags':     [],
+                           'entry_contents': []},
+            'files':      [],
+            'pages':      [],
+            'photos':     [],
+            'tasks':      [],
+            'videos':     [],
+            'wiki':       []}}]}]
+
 output,output_dir_name,output_file_name = [],'output','output.txt'
 post_url = website + 'action/login'
 s = Session()
@@ -21,7 +55,7 @@ try:
         tokens = [ x['value'] for x in soup(class_='elgg-form-login')[0].find_all('input', type='hidden') if x['value'] != 'true' ]
 except:
         print("Failed to log in to " + website)
-        exit(1)
+        exit(2)
         
 data = {
     '__elgg_token':    tokens[0],
@@ -131,7 +165,6 @@ for entry,n in zip(entries,range(len(entries))):
         with open (filename, 'w') as fileio:
                 for line in lines:
                         print(line,file=fileio)
-
                         
 # Group ontology:
 # 
@@ -150,7 +183,7 @@ for entry,n in zip(entries,range(len(entries))):
 
 # Roadmap:
 # [x] Log in
-# [ ] Get a sample group type
-# [ ] Write to a file
-# [ ] Write to a file tree
+# [x] Get a sample group type
+# [x] Write to a file
+# [x] Write to a file tree
 # ...
