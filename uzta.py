@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup as bs
 from requests import get, post, Session
 from re import search, findall
 from pprint import pprint
+from time import sleep
 import os
 
 # ---- Step 0. Initialisation
@@ -103,23 +104,14 @@ disc_url = soup.select('.elgg-menu-item-discussion')[0].a['href']
 gid = disc_url.split('/')[-1] # E.g. the last word of the URL.
 
 # https://cooperativa.ecoxarxes.cat/tasks/group/14716/all
-task_url = website + 'tasks/group/' + gid + '/all'
-print('task_url = ' + task_url)
+tasks_url = website + 'tasks/group/' + gid + '/all'
+photos_url = website + 'photos/group/' + gid + '/all'
 
 # ---- Step 5. Goto groups page and get all the discussions
 print('---- Step 5. Goto groups page and get all the discussions')
 
 def read_discussions_page(soup):
 	""" Take soup and return discussions from discussion page. soup => entries """
-	entry = {'title':   "x",
-			 'link':    "x",
-             'first':   "x",
-             'author':  "x",
-             'last':    "x",
-             'replier': "x",
-             'count':   "x",
-             'tags':    "x",
-             'content': "x"}
 	entry_titles = [ x.string for x in soup.select('h3 a') ]
 	entry_links = [ x['href'] for x in soup.select('h3 a') ]
 	entry_firsts = [ x.time['datetime'] for x in soup.select('.elgg-subtext') if x.time]
@@ -238,13 +230,87 @@ def read_tasks(url):
 		tasks = tasks + read_tasks_page(url)
 	return tasks
 
-tasks = read_tasks(task_url)
+tasks = read_tasks(tasks_url)
 
-# ---- Step 7. Save some content
-print('---- Step 7. Save some content')
+# ---- Step 7. Goto groups page and get all the photos
+print('---- Step 7. Goto groups page and get all the photos')
+
 def mkdir(dir_name):
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
+
+def save_image(url):
+	# TODO this assumes all images are JPGs while some are PNGs
+	id = url.split('/')[-3]
+	mkdir('/tmp/uzta')
+	filename = '/tmp/uzta/' + id + '.jpg' 
+	sleep(1)
+	with open(filename, 'wb') as handle:
+		response = s.get(url, stream=True)
+		if not response.ok:
+			print(url)
+			print('*** ERROR: Download error ' + str(response.status_code))
+		for block in response.iter_content(1024*1024):
+			if not block:
+				break
+			handle.write(block)
+	return filename
+
+def read_photo_page(url):
+	""" Take url and return photos from photo page. url => photos """
+	soup = bs(s.get(url).text)
+	photos_title = soup.title.text.split(': ')[1]
+	photos_titles = [ x.text for x in soup.select('.tidypics-heading') ]
+	photos_author = soup(class_='elgg-subtext')[0].find('a').text
+	photos_link = [ x.get('href').replace('?view=rss','') for x in soup.find_all('a') if x.get('title') == 'RSS feed for this page' ][0]
+	# Sample: https://cooperativa.ecoxarxes.cat/photos/thumbnail/256365/master/
+	photos_links = [ x['href'] for x in soup.select('.tidypics-heading') ]
+	photos_ids = [ url.split('/')[-2] for url in photos_links ]
+	photos_links = [ website+'photos/thumbnail/'+id+'/master/' for id in photos_ids ]
+	photos_images = []
+	for link in photos_links:
+		photos_images.append(save_image(link))
+	photos_tags = [ tag.string for tag in soup.select('.elgg-tag') ]
+	if photos_tags == []:
+		photos_tags = ['']
+	return [{'title':  [photos_title],
+			'titles':  photos_titles,
+			'author': [photos_author],
+			'link':   [photos_link],
+			'links':   photos_links,
+			'ids':     photos_ids,
+			'images':  photos_images,
+			'tags':    photos_tags}]
+
+def read_photos_page(url):
+	""" Take url and return photos from a photos page. url => photos """
+	soup = bs(s.get(url).text)
+	# photos_links = [ x.get('href') for x in soup.select('.tidypics-heading') ]
+	photos_links = [ x['href'] for x in soup.select('.tidypics-heading') ]
+	photos = []
+	# TODO parallelise this with the python jobs library?
+	for url in photos_links:
+		print('Reading photos page ' + url)
+		photos = photos + read_photo_page(url)
+	return photos
+
+def read_photos(url):
+	""" Take url and return photos from photo page. url => photos """
+	print("Original URL: " + url)
+	soup = bs(s.get(url).text)
+	pager_links = [ x['href'] for x in soup.select('.elgg-pagination a')[:-1] ]
+	# TODO check if the pager really works here (works on discussion pages)
+	for link in pager_links:
+		print("Pager link: " + link)
+	photos = []
+	for u in [url] + pager_links:
+		photos = photos + read_photos_page(url)
+	return photos
+
+photos = read_photos(photos_url)
+
+# ---- Step 8. Save some content
+print('---- Step 8. Save some content')
 
 mkdir(output_dir_name)
 mkdir(os.path.join(output_dir_name, 'testgroup'))
@@ -272,13 +338,36 @@ def write_tasks(tasks):
 	for task,n in zip(tasks,range(len(tasks))):
 		lines = [ key+': '+value for key, value in task.items() if not isinstance(value,list)]
 		filename = filebasename+str(n)+'.txt'
-		print(filename)
 		with open (filename, 'w') as fileio:
 			for line in lines:
 				print(line,file=fileio)
+
+def write_photos(p):
+	# filebasename = os.path.join(output_dir_name,
+	# 							'testgroup',
+	# 							'photos',
+	# 							'photos')
+	# p_n = len(p['photos_title'])
+	# p_lines = p['photos_title'] + p['photos_author'] + p['photos_link']
+	# with open (filename, 'w') as handle:
+	# 	for line in photos_lines:
+	# 		print(line,file=handle)
+	# filebasename = os.path.join(output_dir_name,
+	# 							'testgroup',
+	# 							'photos',
+	#							'photo')
+	pprint(photos)
+	# for p,i in zip(p['photos_titles'],photos_ids)):
+	# 	lines = [ key+': '+value for key, value in p.items() if not isinstance(value,list)]
+	# 	filename = filebasename+str(n)+'.txt'
+	# 	# print(filename)
+	# 	with open (filename, 'w') as fileio:
+	# 		for line in lines:
+	#			print(line,file=fileio)
 				
 write_discussions(entries)
 write_tasks(tasks)
+write_photos(photos)
 
 # Group ontology:
 # 
@@ -290,7 +379,7 @@ write_tasks(tasks)
 # [x] Group discussion
 # [ ] Group files
 # [ ] Group pages
-# [ ] Group photos
+# [~] Group photos
 # [x] Group tasks
 # [ ] Group videos
 # [ ] Group wiki
