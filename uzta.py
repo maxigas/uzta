@@ -5,7 +5,8 @@
 # 2 Failed to log in to website.
 from bs4 import BeautifulSoup as bs
 from requests import get, post, Session
-from re import search
+from re import search, findall
+from pprint import pprint
 import os
 
 # ---- Step 0. Initialisation
@@ -55,7 +56,7 @@ soup = bs(s.get(website).text)
 try:
 	tokens = [ x['value'] for x in soup(class_='elgg-form-login')[0].find_all('input', type='hidden') if x['value'] != 'true' ]
 except:
-	print("Failed to log in to " + website)
+	print("Failed to find tokens on " + website)
 	exit(2)
         
 data = {
@@ -82,8 +83,6 @@ group_subs =  [ x.get_text() for x in soup(class_='elgg-subtext') ]
 groups = list(map(lambda t,l,s: {'title':t,'link':l,'sub':s},
                   group_titles,group_subs,group_links))
 
-# Example: groups → [{'title': 'Fuck Corp$urfing - FCS', 'sub': 'https://n-1.cc/g/fuck_corpsurfing_fcs', 'link': "Hack CS, don't use it! - Hackea CS, no lo uses!"}, {'title': 'LelaCoders', 'sub': 'https://n-1.cc/g/donestech+lelacoders', 'link': 'Subgroup of DonesTech'}, {'title': 'bughunting', 'sub': 'https://n-1.cc/g/bughunting', 'link': 'yo programo, tu programas, ellx hackea'}, {'title': 'B27 discussion group', 'sub': 'https://n-1.cc/g/colectivo_b27_discussion_group', 'link': 'bug = software error'}, {'title': 'Fuck FaceFuck - FFF', 'sub': 'https://n-1.cc/g/fuck-facefuck---fff', 'link': ''}, {'title': 'Help', 'sub': 'https://n-1.cc/g/help', 'link': "Hack FB, don't use it! - Hackea facebook! No lo uses!"}, {'title': 'HackTheNight', 'sub': 'https://n-1.cc/g/hackthenight', 'link': 'helping to start in Lorea'}, {'title': 'HackLabs', 'sub': 'https://n-1.cc/g/hacklabs', 'link': 'hackspace @ cso la otra carboneria'}]
-
 # data structure:
 # dictionaries of dictionaries of dictionaries of dictionaries of dictionaries
 # ['groups' ['mygroup': ['discussions': ['1895355': ['title': "foo",
@@ -96,12 +95,16 @@ groups = list(map(lambda t,l,s: {'title':t,'link':l,'sub':s},
 # https://n-1.cc/discussion/view/1895355/club-informatico-de-la-base
 
 # ---- Step 4. Open a group page and get id and discussion page link
-print('---- Step 4. Open a group page and get id and discussion page link')
+print('---- Step 4. Open a group page and get id, discussion and task page links')
 # TODO: Will have to iterate on all links, but for testing only do first:
-group_link = [ x for x in group_links if 'hackthenight' in x ][0]
+group_link = [ x for x in group_links if 'postcapitalista' in x ][0]
 soup = bs(s.get(group_link).text)
 disc_url = soup.select('.elgg-menu-item-discussion')[0].a['href']
 gid = disc_url.split('/')[-1] # E.g. the last word of the URL.
+
+# https://cooperativa.ecoxarxes.cat/tasks/group/14716/all
+task_url = website + 'tasks/group/' + gid + '/all'
+print('task_url = ' + task_url)
 
 # ---- Step 5. Goto groups page and get all the discussions
 print('---- Step 5. Goto groups page and get all the discussions')
@@ -120,17 +123,25 @@ def read_discussions_page(soup):
 	entry_titles = [ x.string for x in soup.select('h3 a') ]
 	entry_links = [ x['href'] for x in soup.select('h3 a') ]
 	entry_firsts = [ x.time['datetime'] for x in soup.select('.elgg-subtext') if x.time]
-	entry_authors = [ x.a.string for x in soup.select('.elgg-subtext') if 'Started' in x.contents[0].string ]
+    # Worked with n-1.cc but not with cooperativa.ecoxarxes.cat...
+	try:
+		entry_authors = [ x.a.string for x in soup.select('.elgg-subtext') if 'Started' in x.contents[0].string ]
+	except:
+		entry_authors = [ x.contents[0].string.replace('Started by ','') for x in soup.select('.elgg-subtext') if 'Started' in x.contents[0].string ]
 	entry_lasts = [ x.time['datetime'] if x.time else 'n/a' for x in soup.select('.groups-latest-reply') ]
 	entry_repliers = [ x.a.string if x.a else 'n/a' for x in soup.select('.groups-latest-reply') ]
-	entry_counts = [ search(r'[0-9]+', x.find_all('a')[1].string).group() if n != 'n/a' else '0' for x,n in zip(soup.select('.elgg-subtext'), entry_lasts) ]
+    # Worked with n-1.cc but not with cooperativa.ecoxarxes.cat...
+	try:
+		entry_counts = [ search(r'[0-9]+', x.find_all('a')[1].string).group() if n != 'n/a' else '0' for x,n in zip(soup.select('.elgg-subtext'), entry_lasts) ]
+	except:
+		entry_counts = []
 	entry_tags = []
 	for body in soup.select('.elgg-body'):
 		if body.select('.clearfix'):
 			entry_tags.append([ tag.string for tag in body.select('.elgg-tag') ])
 		else:
 			entry_tags.append([])
-			entry_contents = [ x.string for x in soup.select('.elgg-content') ]
+	entry_contents = [ x.string for x in soup.select('.elgg-content') ]
 	return list(map(lambda tit,lin,fir,aut,las,rep,cou,tag,con:
 					 {'title':tit,
 					  'link':lin,
@@ -152,7 +163,7 @@ def read_discussions_page(soup):
 					 entry_contents))
 
 def read_discussions(url):
-	""" Take soup and return discussions from discussion page. soup => entries """
+	""" Take url and return discussions from discussion page. soup => entries """
 	soup = bs(s.get(url).text)
 	pager_links = [ x['href'] for x in soup.select('.elgg-pagination a')[:-1] ]
 	entries = []
@@ -166,7 +177,68 @@ entries = read_discussions(disc_url)
 # ---- Step 6. Goto groups page and get all the tasks
 print('---- Step 6. Goto groups page and get all the tasks')
 
-# TODO 
+def read_task_page(soup):
+	""" Take soup and return tasks from task page. soup => tasks """
+	task = {'title':   "x",
+			 'link':    "x",
+             'author':  "x",
+             'done':   "x",
+             'tags':    "x",
+             'content': "x"}
+	task_title = soup.title.text.split(': ')[1]
+	print(task_title)
+	task_link = [ x.get('href').replace('?view=rss','') for x in soup.find_all('a') if x.get('title') == 'RSS feed for this page' ][0]
+	try:
+		task_author = [ soup.find_all('div', class_='elgg-subtext')[0].text.split(' by ')[1].split(' ')[0] ][0]
+	except:
+		task_author = [ soup.find_all('div', class_='elgg-subtext')[0].text.split(' to ')[1].split(' ')[0] ][0]
+	# TODO harvest done status too
+	task_done = 'unknown'
+	task_tags = [ tag.string for tag in soup.select('.elgg-tag') ]
+	if task_tags == []:
+		task_tags = ['']
+	task_content = 	soup.select('.elgg-output')[0].text
+	return list(map(lambda title,link,author,done,tags,content:
+					 {'title':title,
+					  'link':link,
+					  'author':author,
+					  'done':done,
+					  'tags':tags,
+					  'content':content},
+					[task_title],
+					[task_link],
+					[task_author],
+					[task_done],
+					task_tags,
+					[task_content]))
+
+def read_tasks_page(url):
+	""" Take url and return tasks from a task page. url => tasks """
+	tasks_links = findall('"' + website + 'tasks/view/[0-9]*/[a-z-]*"', s.get(url).text)
+	# Remove duplicates
+	tasks_links = list(set(tasks_links))
+	# Remove doublequotes
+	tasks_links = [ link.replace('"','') for link in tasks_links ]
+	tasks = []
+	for url in tasks_links:
+		print('Reading task page ' + url)
+		tasks = tasks + read_task_page(bs(s.get(url).text))
+	return tasks
+
+def read_tasks(url):
+	""" Take url and return tasks from task page. url => tasks """
+	soup = bs(s.get(url).text)
+	pager_links = [ x['href'] for x in soup.select('.elgg-pagination a')[:-1] ]
+	# TODO check if the pager really works here (works on discussion pages)
+	for link in pager_links:
+		print('Pager link: ' + link)
+	tasks = []
+	for u in [url] + pager_links:
+		print('Reading tasks page ' + u)
+		tasks = tasks + read_tasks_page(url)
+	return tasks
+
+tasks = read_tasks(task_url)
 
 # ---- Step 7. Save some content
 print('---- Step 7. Save some content')
@@ -176,22 +248,37 @@ def mkdir(dir_name):
 
 mkdir(output_dir_name)
 mkdir(os.path.join(output_dir_name, 'testgroup'))
-mkdir(os.path.join(output_dir_name, 'testgroup', 'discussion'))
+mkdir(os.path.join(output_dir_name, 'testgroup', 'discussions'))
+mkdir(os.path.join(output_dir_name, 'testgroup', 'tasks'))
 
 def write_discussions(entries):
 	filebasename = os.path.join(output_dir_name,
 								'testgroup',
-								'discussion',
+								'discussions',
 								'discussion')
 	for entry,n in zip(entries,range(len(entries))):
 		lines = [ key+': '+value for key, value in entry.items() if not isinstance(value,list)]
+		filename = filebasename+str(n)+'.txt'
+#		print(filename)
+		with open (filename, 'w') as fileio:
+			for line in lines:
+				print(line,file=fileio)
+
+def write_tasks(tasks):
+	filebasename = os.path.join(output_dir_name,
+								'testgroup',
+								'tasks',
+								'task')
+	for task,n in zip(tasks,range(len(tasks))):
+		lines = [ key+': '+value for key, value in task.items() if not isinstance(value,list)]
 		filename = filebasename+str(n)+'.txt'
 		print(filename)
 		with open (filename, 'w') as fileio:
 			for line in lines:
 				print(line,file=fileio)
-
+				
 write_discussions(entries)
+write_tasks(tasks)
 
 # Group ontology:
 # 
@@ -200,11 +287,11 @@ write_discussions(entries)
 # [ ] Group bookmarks
 # [ ] Group calendar
 # [ ] Group decisions
-# [~] Group discussion
+# [x] Group discussion
 # [ ] Group files
 # [ ] Group pages
 # [ ] Group photos
-# [ ] Group tasks
+# [x] Group tasks
 # [ ] Group videos
 # [ ] Group wiki
 
